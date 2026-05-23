@@ -1,0 +1,5 @@
+# Server configuration block
+server:
+  # The port to listen on
+  port: 8080
+  host: localhost

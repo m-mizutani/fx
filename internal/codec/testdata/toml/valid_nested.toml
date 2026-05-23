@@ -1,0 +1,5 @@
+[server.http]
+port = 80
+
+[server.https]
+port = 443

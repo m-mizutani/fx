@@ -1,0 +1,5 @@
+name = "alice"
+age = 30
+weight = 55.5
+active = true
+nick = null

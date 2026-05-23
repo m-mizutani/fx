@@ -1,0 +1,8 @@
+single: 'hello world'
+double: "with \"escapes\""
+literal: |
+  line1
+  line2
+folded: >
+  this is
+  one line

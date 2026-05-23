@@ -1,0 +1,5 @@
+{
+  name: "alice",
+  age: 30,
+  active: true,
+}

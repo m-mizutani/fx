@@ -1,0 +1,7 @@
+[server]
+host = "localhost"
+port = 8080
+
+[database]
+url = "postgres://localhost/db"
+max_conn = 100
