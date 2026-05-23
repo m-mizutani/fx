@@ -1,0 +1,36 @@
+name: Test
+
+on:
+  push:
+
+jobs:
+  test:
+    name: go test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Cache Go modules
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race -coverprofile=coverage.out ./...

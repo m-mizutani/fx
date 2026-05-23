@@ -42,7 +42,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 
 	cmd := buildCommand(stdin, stdout)
 	if err := cmd.Run(ctx, args); err != nil {
-		fmt.Fprintf(stderr, "fx: %s\n", err)
+		_, _ = fmt.Fprintf(stderr, "fx: %s\n", err)
 		return 1
 	}
 	return 0
