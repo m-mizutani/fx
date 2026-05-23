@@ -1,0 +1,12 @@
+server:
+  host: localhost
+  port: 8080
+  features:
+    - auth
+    - cache
+    - rate-limit
+clients:
+  - name: ios
+    version: 1.0
+  - name: android
+    version: 1.1
