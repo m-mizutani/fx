@@ -89,10 +89,21 @@ func splitHCLLine(line string) (code, comment string) {
 	masked := []byte(line)
 	inStr := false
 	for i := 0; i < len(masked); i++ {
-		c := masked[i]
-		if c == '"' && (i == 0 || masked[i-1] != '\\') {
-			inStr = !inStr
-			continue
+		c := line[i]
+		if c == '"' {
+			// A quote terminates a string unless preceded by an *odd* number
+			// of backslashes — only then is it escaped. Counting consecutive
+			// `\` from the original (un-masked) line keeps cases like
+			// `"foo\\"` correct: the trailing `\\` is an escaped backslash,
+			// so the final `"` does end the string.
+			bs := 0
+			for j := i - 1; j >= 0 && line[j] == '\\'; j-- {
+				bs++
+			}
+			if bs%2 == 0 {
+				inStr = !inStr
+				continue
+			}
 		}
 		if inStr {
 			masked[i] = ' '
@@ -222,13 +233,14 @@ func ctyToIR(v cty.Value) (*fxnode.Node, error) {
 	case ty == cty.String:
 		return fxnode.NewString(v.AsString()), nil
 	case ty == cty.Number:
+		// Use big.Float.Text rather than Int64 / Float64 so that values which
+		// overflow Go's fixed-width types or carry more precision than
+		// float64 can survive the round trip without silent truncation.
 		bf := v.AsBigFloat()
 		if bf.IsInt() {
-			i, _ := bf.Int64()
-			return fxnode.NewScalar(fxnode.TagInt, strconv.FormatInt(i, 10)), nil
+			return fxnode.NewScalar(fxnode.TagInt, bf.Text('f', -1)), nil
 		}
-		f, _ := bf.Float64()
-		return fxnode.NewScalar(fxnode.TagFloat, strconv.FormatFloat(f, 'g', -1, 64)), nil
+		return fxnode.NewScalar(fxnode.TagFloat, bf.Text('g', -1)), nil
 	case ty == cty.Bool:
 		if v.True() {
 			return fxnode.NewScalar(fxnode.TagBool, "true"), nil

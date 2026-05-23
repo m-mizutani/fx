@@ -4,6 +4,7 @@
 package format
 
 import (
+	"bytes"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -88,18 +89,21 @@ var (
 // Returns (format, true) when it can identify the input; otherwise (\"\", false).
 // The caller is expected to surface a clear error and ask the user to supply
 // --src when detection fails.
+//
+// Operates on the input byte slice without allocating a string copy of the
+// whole buffer — useful when stdin or a large file is being sniffed.
 func Detect(b []byte) (Format, bool) {
-	trimmed := strings.TrimSpace(string(b))
-	if trimmed == "" {
+	trimmed := bytes.TrimSpace(b)
+	if len(trimmed) == 0 {
 		return "", false
 	}
 
 	// Jsonnet keywords that JSON cannot contain.
-	if strings.HasPrefix(trimmed, "local ") ||
-		strings.HasPrefix(trimmed, "function(") ||
-		strings.HasPrefix(trimmed, "function ") ||
-		strings.HasPrefix(trimmed, "import ") ||
-		strings.HasPrefix(trimmed, "importstr ") {
+	if bytes.HasPrefix(trimmed, []byte("local ")) ||
+		bytes.HasPrefix(trimmed, []byte("function(")) ||
+		bytes.HasPrefix(trimmed, []byte("function ")) ||
+		bytes.HasPrefix(trimmed, []byte("import ")) ||
+		bytes.HasPrefix(trimmed, []byte("importstr ")) {
 		return FormatJsonnet, true
 	}
 
@@ -112,43 +116,43 @@ func Detect(b []byte) (Format, bool) {
 	// at the first line.
 	if trimmed[0] == '[' {
 		firstLine := trimmed
-		if idx := strings.IndexByte(trimmed, '\n'); idx >= 0 {
+		if idx := bytes.IndexByte(trimmed, '\n'); idx >= 0 {
 			firstLine = trimmed[:idx]
 		}
-		firstLine = strings.TrimRight(firstLine, " \t\r")
-		if reTOMLArrTbl.MatchString(firstLine) || reTOMLSection.MatchString(firstLine) {
+		firstLine = bytes.TrimRight(firstLine, " \t\r")
+		if reTOMLArrTbl.Match(firstLine) || reTOMLSection.Match(firstLine) {
 			return FormatTOML, true
 		}
 		return FormatJSON, true
 	}
 
-	// Line-oriented signals.
-	lines := strings.Split(string(b), "\n")
+	// Line-oriented signals. bytes.Split returns sub-slices of the original
+	// buffer (no copy per line).
 	var (
 		tomlSection int
 		hclBlock    int
 		yamlKey     int
 		attrEquals  int
 	)
-	for _, line := range lines {
-		t := strings.TrimSpace(line)
-		if t == "" {
+	for _, line := range bytes.Split(b, []byte("\n")) {
+		t := bytes.TrimSpace(line)
+		if len(t) == 0 {
 			continue
 		}
 		// Skip line-comment lines so they don't pollute the counters.
-		if strings.HasPrefix(t, "#") || strings.HasPrefix(t, "//") {
+		if bytes.HasPrefix(t, []byte("#")) || bytes.HasPrefix(t, []byte("//")) {
 			continue
 		}
 		switch {
-		case reTOMLArrTbl.MatchString(t):
+		case reTOMLArrTbl.Match(t):
 			tomlSection++
-		case reTOMLSection.MatchString(t):
+		case reTOMLSection.Match(t):
 			tomlSection++
-		case reHCLBlock.MatchString(t):
+		case reHCLBlock.Match(t):
 			hclBlock++
-		case reYAMLKey.MatchString(t):
+		case reYAMLKey.Match(t):
 			yamlKey++
-		case reAttrEquals.MatchString(t):
+		case reAttrEquals.Match(t):
 			attrEquals++
 		}
 	}

@@ -14,4 +14,5 @@ var (
 	YamlNodeToIR       = yamlNodeToIR
 	IRToYAMLNode       = irToYAMLNode
 	YAMLTagToScalarTag = yamlTagToScalarTag
+	SplitHCLLine       = splitHCLLine
 )

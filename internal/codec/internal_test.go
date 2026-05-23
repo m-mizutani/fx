@@ -5,6 +5,7 @@ package codec_test
 // export_test.go.
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/m-mizutani/fx/internal/codec"
@@ -175,6 +176,27 @@ func TestCtyToIRNumberFloat(t *testing.T) {
 	gt.Equal(t, n.Scalar.Tag, fxnode.TagFloat)
 }
 
+func TestCtyToIRLargeInteger(t *testing.T) {
+	// Beyond int64 range: 2^65 = 36893488147419103232. We expect the value
+	// to survive intact via big.Float.Text rather than silently truncate.
+	bf, _, _ := big.ParseFloat("36893488147419103232", 10, 200, big.ToNearestEven)
+	v := cty.NumberVal(bf)
+	n, err := codec.CtyToIR(v)
+	gt.NoError(t, err)
+	gt.Equal(t, n.Scalar.Tag, fxnode.TagInt)
+	gt.Equal(t, n.Scalar.Repr, "36893488147419103232")
+}
+
+func TestCtyToIRHighPrecisionFloat(t *testing.T) {
+	// A high-precision decimal that would lose digits via float64 conversion.
+	bf, _, _ := big.ParseFloat("3.141592653589793238462643383279", 10, 200, big.ToNearestEven)
+	v := cty.NumberVal(bf)
+	n, err := codec.CtyToIR(v)
+	gt.NoError(t, err)
+	gt.Equal(t, n.Scalar.Tag, fxnode.TagFloat)
+	gt.S(t, n.Scalar.Repr).Contains("3.14159265358979")
+}
+
 func TestCtyToIRNull(t *testing.T) {
 	n, err := codec.CtyToIR(cty.NullVal(cty.String))
 	gt.NoError(t, err)
@@ -318,6 +340,62 @@ func TestYAMLTagToScalarTagValueInference(t *testing.T) {
 		got := codec.YAMLTagToScalarTag("", v)
 		gt.Equal(t, got, want)
 	}
+}
+
+// --- splitHCLLine: string-literal aware comment split ----------------------
+
+func TestSplitHCLLineNoComment(t *testing.T) {
+	code, comment := codec.SplitHCLLine(`name = "alice"`)
+	gt.Equal(t, code, `name = "alice"`)
+	gt.Equal(t, comment, "")
+}
+
+func TestSplitHCLLineHashComment(t *testing.T) {
+	code, comment := codec.SplitHCLLine(`name = "alice" # hello`)
+	gt.Equal(t, code, `name = "alice" `)
+	gt.Equal(t, comment, "hello")
+}
+
+func TestSplitHCLLineDoubleSlashComment(t *testing.T) {
+	code, comment := codec.SplitHCLLine(`name = "alice" // hello`)
+	gt.Equal(t, code, `name = "alice" `)
+	gt.Equal(t, comment, "hello")
+}
+
+func TestSplitHCLLineHashInsideString(t *testing.T) {
+	code, comment := codec.SplitHCLLine(`url = "https://example.com/#frag"`)
+	gt.Equal(t, code, `url = "https://example.com/#frag"`)
+	gt.Equal(t, comment, "")
+}
+
+func TestSplitHCLLineEscapedQuoteInsideString(t *testing.T) {
+	// Inner `\"` does not end the string, so the `#` is a real comment marker.
+	code, comment := codec.SplitHCLLine(`v = "she said \"hi\"" # quoted`)
+	gt.Equal(t, code, `v = "she said \"hi\"" `)
+	gt.Equal(t, comment, "quoted")
+}
+
+func TestSplitHCLLineEscapedBackslashEndsString(t *testing.T) {
+	// `\\` is an escaped backslash; the following quote *does* terminate the
+	// string. The `#` after the string is a comment.
+	code, comment := codec.SplitHCLLine(`v = "foo\\" # tail`)
+	gt.Equal(t, code, `v = "foo\\" `)
+	gt.Equal(t, comment, "tail")
+}
+
+func TestSplitHCLLineDoubleEscapedBackslashEndsString(t *testing.T) {
+	// `\\\\` is two escaped backslashes; the following quote terminates.
+	code, comment := codec.SplitHCLLine(`v = "foo\\\\" # tail`)
+	gt.Equal(t, code, `v = "foo\\\\" `)
+	gt.Equal(t, comment, "tail")
+}
+
+func TestSplitHCLLineOddBackslashEscapesQuote(t *testing.T) {
+	// `\\\"` ends in escaped backslash + escaped quote, so the `"` is
+	// escaped and we are still inside the string at the `#`.
+	code, comment := codec.SplitHCLLine(`v = "foo\\\"# inner" # outer`)
+	gt.Equal(t, code, `v = "foo\\\"# inner" `)
+	gt.Equal(t, comment, "outer")
 }
 
 // --- irToYAMLNode mapping/sequence error paths ------------------------------
